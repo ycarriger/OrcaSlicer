@@ -627,12 +627,21 @@ inline void extrusion_entities_append_loops(ExtrusionEntitiesPtr &dst, Polygons 
 inline void extrusion_entities_append_loops_and_paths(ExtrusionEntitiesPtr &dst, Polylines &&polylines, ExtrusionRole role, double mm3_per_mm, float width, float height)
 {
     dst.reserve(dst.size() + polylines.size());
+    bool increaseHeight = true;
+    float origHeight     = height;
     for (Polyline &polyline : polylines) {
         if (polyline.is_valid()) {
             if (polyline.is_closed()) {
+                if (increaseHeight && is_external_perimeter(role)) {
+                    height *= 1.3f;
+                }
                 ExtrusionPath extrusion_path(role, mm3_per_mm, width, height);
                 extrusion_path.polyline = std::move(polyline);
                 dst.emplace_back(new ExtrusionLoop(std::move(extrusion_path)));
+                if (increaseHeight && is_external_perimeter(role)) {
+                    increaseHeight = false;
+                    height         = origHeight;
+                }
             } else {
                 ExtrusionPath *extrusion_path = new ExtrusionPath(role, mm3_per_mm, width, height);
                 extrusion_path->polyline      = std::move(polyline);

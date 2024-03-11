@@ -300,6 +300,7 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
         const std::map<int, Polygons> *lower_polygons_series;
         double extrusion_mm3_per_mm;
         double extrusion_width;
+        float pathHeight;
         if (is_external) {
             if (is_small_width) {
                 //BBS: smaller width external perimeter
@@ -325,7 +326,17 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
             fuzzified = loop.polygon;
             fuzzy_polygon(fuzzified, scaled<float>(perimeter_generator.config->fuzzy_skin_thickness.value), scaled<float>(perimeter_generator.config->fuzzy_skin_point_distance.value));
         }
-        if (perimeter_generator.config->detect_overhang_wall && perimeter_generator.layer_id > perimeter_generator.object_config->raft_layers) {
+        
+        
+        if (is_external && ((perimeter_generator.object_config->raft_layers == 0 && perimeter_generator.layer_id == 0) ||
+                            perimeter_generator.layer_id == (perimeter_generator.object_config->raft_layers + 1))) {
+            pathHeight = (float)perimeter_generator.layer_height * 1.3f;
+        } else {
+            pathHeight = perimeter_generator.layer_height;
+        }
+
+         if (perimeter_generator.config->detect_overhang_wall &&
+            perimeter_generator.layer_id > perimeter_generator.object_config->raft_layers) {
             // get non 100% overhang paths by intersecting this loop with the grown lower slices
             // prepare grown lower layer slices for overhang detection
             BoundingBox bbox(polygon.points);
@@ -366,7 +377,7 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
                         role,
                         extrusion_mm3_per_mm,
                         extrusion_width,
-                        (float)perimeter_generator.layer_height);
+                        pathHeight);
 
                     remain_polines = (it == lower_polygons_series->begin()) ? diff_pl({polygon}, lower_polygons_series_clipped) :
                                                                               diff_pl(remain_polines, lower_polygons_series_clipped);
@@ -388,7 +399,7 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
                     role,
                     extrusion_mm3_per_mm,
                     extrusion_width,
-                    (float)perimeter_generator.layer_height);
+                    pathHeight);
 
                 remain_polines = diff_pl({polygon}, lower_polygons_series_clipped);
             }
@@ -417,7 +428,7 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
             path.curve_degree = 0;
             path.mm3_per_mm = extrusion_mm3_per_mm;
             path.width = extrusion_width;
-            path.height     = (float)perimeter_generator.layer_height;
+            path.height          = pathHeight;
             paths.emplace_back(std::move(path));
         }
 
