@@ -33,3 +33,9 @@ src/OrcaSlicer-doc/
 /deps/DL_CACHE/
 /deps/DL_CACHE
 resources/profiles/user/default
+/.gitattributes
+/CMakeSettings.json
+/resources
+/vcpkg-configuration.json
+/vcpkg.json
+/vcpkg_installed
