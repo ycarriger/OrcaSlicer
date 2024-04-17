@@ -194,6 +194,13 @@ void OptionsGroup::show_field(const t_config_option_key& opt_key, bool show/* = 
     }
 }
 
+void OptionsGroup::enable_field(const t_config_option_key& opt_key, bool enable)
+{
+    if (Field* f = get_field(opt_key); f) {
+        f->toggle(enable);
+    }
+}
+
 void OptionsGroup::set_name(const wxString& new_name)
 {
 	stb->SetLabel(new_name);
@@ -282,7 +289,7 @@ void OptionsGroup::activate_line(Line& line)
 	// Set sidetext width for a better alignment of options in line
 	// "m_show_modified_btns==true" means that options groups are in tabs
 	if (option_set.size() > 1 && m_use_custom_ctrl) {
-        // sublabel_width = Field::def_width();
+        sublabel_width = Field::def_width() + 1;
         sidetext_width = Field::def_width_thinner();
 	}
 
@@ -525,6 +532,9 @@ bool OptionsGroup::activate(std::function<void()> throw_if_canceled/* = [](){}*/
 
 	return true;
 }
+
+void free_window(wxWindow *win);
+
 // delete all controls from the option group
 void OptionsGroup::clear(bool destroy_custom_ctrl)
 {
@@ -553,8 +563,10 @@ void OptionsGroup::clear(bool destroy_custom_ctrl)
     if (custom_ctrl) {
         for (auto const &item : m_fields) {
             wxWindow* win = item.second.get()->getWindow();
-            if (win)
+            if (win) {
+                free_window(win);
                 win = nullptr;
+            }
         }
 		//BBS: custom_ctrl already destroyed from sizer->clear(), no need to destroy here anymore
 		if (destroy_custom_ctrl)
@@ -1037,6 +1049,11 @@ boost::any ConfigOptionsGroup::get_config_value(const DynamicPrintConfig& config
 		break;
 	case coEnum:
         if (!config.has("first_layer_sequence_choice") && opt_key == "first_layer_sequence_choice") {
+            // reset to Auto value
+            ret = 0;
+            break;
+        }
+        if (!config.has("other_layers_sequence_choice") && opt_key == "other_layers_sequence_choice") {
             // reset to Auto value
             ret = 0;
             break;

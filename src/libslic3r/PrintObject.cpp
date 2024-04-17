@@ -97,6 +97,7 @@ PrintObject::PrintObject(Print* print, ModelObject* model_object, const Transfor
 	// snug height and an approximate bounding box in XY.
     BoundingBoxf3  bbox        = model_object->raw_bounding_box();
     Vec3d 		   bbox_center = bbox.center();
+    
 	// We may need to rotate the bbox / bbox_center from the original instance to the current instance.
 	double z_diff = Geometry::rotation_diff_z(model_object->instances.front()->get_rotation(), instances.front().model_instance->get_rotation());
 	if (std::abs(z_diff) > EPSILON) {
@@ -109,7 +110,7 @@ PrintObject::PrintObject(Print* print, ModelObject* model_object, const Transfor
     m_center_offset = Point::new_scale(bbox_center.x(), bbox_center.y());
     // Size of the transformed mesh. This bounding may not be snug in XY plane, but it is snug in Z.
     m_size = (bbox.size() * (1. / SCALING_FACTOR)).cast<coord_t>();
-    m_size.z() = coord_t(model_object->max_z() * (1. / SCALING_FACTOR));
+    m_max_z = scaled(model_object->instance_bounding_box(0).max(2));
 
     this->set_instances(std::move(instances));
 }
@@ -1145,6 +1146,7 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "seam_slope_type"
             || opt_key == "seam_slope_conditional"
             || opt_key == "scarf_angle_threshold"
+            || opt_key == "scarf_overhang_threshold"
             || opt_key == "scarf_joint_speed"
             || opt_key == "scarf_joint_flow_ratio"
             || opt_key == "seam_slope_start_height"
@@ -1302,7 +1304,7 @@ void PrintObject::detect_surfaces_type()
 
                     ExPolygons     layerm_slices_surfaces = to_expolygons(layerm->slices.surfaces);
                     // no_perimeter_full_bridge allow to put bridges where there are nothing, hence adding area to slice, that's why we need to start from the result of PerimeterGenerator.
-                    if (layerm->region().config().counterbole_hole_bridging.value == chbFilled) {
+                    if (layerm->region().config().counterbore_hole_bridging.value == chbFilled) {
                         layerm_slices_surfaces = union_ex(layerm_slices_surfaces, to_expolygons(layerm->fill_surfaces.surfaces));
                     }
 
@@ -1981,7 +1983,7 @@ void PrintObject::discover_vertical_shells()
 #ifdef DEBUG_BRIDGE_OVER_INFILL
 template<typename T> void debug_draw(std::string name, const T& a, const T& b, const T& c, const T& d)
 {
-    std::vector<std::string> colors = {"red", "green", "blue", "orange"};
+        std::vector<std::string> colors = {"red", "green", "blue", "orange"};
     BoundingBox              bbox   = get_extents(a);
     bbox.merge(get_extents(b));
     bbox.merge(get_extents(c));
@@ -2059,9 +2061,9 @@ void PrintObject::bridge_over_infill()
                 unsupported_area = closing(unsupported_area, float(SCALED_EPSILON));
                 
                 // Orca:
-                // Lightning infill benefits from always having a bridge layer so don't filter out small unsupported areas. Also, don't filter small internal unsupported areas if the user has requested so.
+                // Don't filter small internal unsupported areas if the user has requested so.
                 double expansion_multiplier = 3;
-                if(has_lightning_infill || po->config().dont_filter_internal_bridges.value !=ibfDisabled){
+                if(po->config().dont_filter_internal_bridges.value !=ibfDisabled){
                     expansion_multiplier = 1;
                 }
                 // By expanding the lower layer solids, we avoid making bridges from the tiny internal overhangs that are (very likely) supported by previous layer solids
@@ -2655,7 +2657,10 @@ void PrintObject::bridge_over_infill()
                 Polygons lightning_area;
                 Polygons expansion_area;
                 Polygons total_fill_area;
+                Polygons total_top_area;
                 for (const LayerRegion *region : layer->regions()) {
+                    Polygons top_polys = to_polygons(region->fill_surfaces.filter_by_types({stTop}));
+                    total_top_area.insert(total_top_area.end(), top_polys.begin(), top_polys.end());
                     Polygons internal_polys = to_polygons(region->fill_surfaces.filter_by_types({stInternal, stInternalSolid}));
                     expansion_area.insert(expansion_area.end(), internal_polys.begin(), internal_polys.end());
                     Polygons fill_polys = to_polygons(region->fill_expolygons);
@@ -2745,6 +2750,7 @@ void PrintObject::bridge_over_infill()
                     bridging_area          = closing(bridging_area, flow.scaled_spacing());
                     bridging_area          = intersection(bridging_area, limiting_area);
                     bridging_area          = intersection(bridging_area, total_fill_area);
+                    bridging_area          = diff(bridging_area, total_top_area);
                     expansion_area         = diff(expansion_area, bridging_area);
 
 #ifdef DEBUG_BRIDGE_OVER_INFILL
@@ -3184,7 +3190,7 @@ void PrintObject::discover_horizontal_shells()
 #endif
 
             // If ensure_vertical_shell_thickness, then the rest has already been performed by discover_vertical_shells().
-            if (region_config.ensure_vertical_shell_thickness.value == evstAll || region_config.ensure_vertical_shell_thickness.value == vsNone)
+            if (region_config.ensure_vertical_shell_thickness.value == evstAll)
                 continue;
 
             coordf_t print_z  = layer->print_z;
@@ -3258,7 +3264,7 @@ void PrintObject::discover_horizontal_shells()
                         
                         // Orca: Also use the same strategy if the user has selected to further reduce
                         // the amount of solid infill on walls.
-                        if (region_config.sparse_infill_density.value == 0 || region_config.ensure_vertical_shell_thickness.value == evstCriticalOnly) {
+                        if (region_config.sparse_infill_density.value == 0 || region_config.ensure_vertical_shell_thickness.value == evstCriticalOnly || region_config.ensure_vertical_shell_thickness.value == evstNone) {
                             // If user expects the object to be void (for example a hollow sloping vase),
                             // don't continue the search. In this case, we only generate the external solid
                             // shell if the object would otherwise show a hole (gap between perimeters of
@@ -3271,24 +3277,30 @@ void PrintObject::discover_horizontal_shells()
                         }
                     }
 
-                    if (region_config.sparse_infill_density.value == 0 || region_config.ensure_vertical_shell_thickness.value == evstCriticalOnly) {
+                    float factor = 0.0f;
+                    if (region_config.sparse_infill_density.value == 0)
+                        factor = 1.0f;
+                    else if (region_config.ensure_vertical_shell_thickness.value == evstNone)
+                        factor = 0.5f;
+                    else if (region_config.ensure_vertical_shell_thickness.value == evstCriticalOnly)
+                        factor = 0.2f;
+                    if (factor > 0.0f) {
                         // if we're printing a hollow object we discard any solid shell thinner
                         // than a perimeter width, since it's probably just crossing a sloping wall
                         // and it's not wanted in a hollow print even if it would make sense when
                         // obeying the solid shell count option strictly (DWIM!)
-                        
+
                         // Orca: Also use the same strategy if the user has selected to reduce
                         // the amount of solid infill on walls. However reduce the margin to 20% overhang
                         // as we want to generate infill on sloped vertical surfaces but still keep a small amount of
                         // filtering. This is an arbitrary value to make this option safe
                         // by ensuring that top surfaces, especially slanted ones dont go **completely** unsupported
                         // especially when using single perimeter top layers.
-                        float margin = region_config.ensure_vertical_shell_thickness.value == evstCriticalOnly? float(neighbor_layerm->flow(frExternalPerimeter).scaled_width()) * 0.2f : float(neighbor_layerm->flow(frExternalPerimeter).scaled_width());
-                        Polygons too_narrow = diff(
-                            new_internal_solid,
-                            opening(new_internal_solid, margin, margin + ClipperSafetyOffset, jtMiter, 5));
+                        float    margin     = float(neighbor_layerm->flow(frExternalPerimeter).scaled_width()) * factor;
+                        Polygons too_narrow = diff(new_internal_solid,
+                                                   opening(new_internal_solid, margin, margin + ClipperSafetyOffset, jtMiter, 5));
                         // Trim the regularized region by the original region.
-                        if (! too_narrow.empty())
+                        if (!too_narrow.empty())
                             new_internal_solid = solid = diff(new_internal_solid, too_narrow);
                     }
 
@@ -3296,7 +3308,7 @@ void PrintObject::discover_horizontal_shells()
                     // when spacing is added in Fill.pm
                     {
                         //FIXME Vojtech: Disable this and you will be sorry.
-                        float margin = 3.f * layerm->flow(frSolidInfill).scaled_width(); // require at least this size
+                        float margin = (region_config.ensure_vertical_shell_thickness.value != evstNone ? 3.f : 1.0f) * layerm->flow(frSolidInfill).scaled_width(); // require at least this size
                         // we use a higher miterLimit here to handle areas with acute angles
                         // in those cases, the default miterLimit would cut the corner and we'd
                         // get a triangle in $too_narrow; if we grow it below then the shell

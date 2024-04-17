@@ -149,6 +149,40 @@ namespace GUI {
 
 class MainFrame;
 
+void start_ping_test()
+{
+    wxArrayString output;
+    wxExecute("ping www.amazon.com", output, wxEXEC_NODISABLE);
+
+    wxString output_i;
+    std::string output_temp;
+
+    for (int i = 0; i < output.size(); i++) {
+        output_i = output[i].To8BitData();
+        output_temp = output_i.ToStdString(wxConvUTF8);
+        BOOST_LOG_TRIVIAL(info) << "ping amazon:" << output_temp;
+
+    }
+    wxExecute("ping www.apple.com", output, wxEXEC_NODISABLE);
+    for (int i = 0; i < output.size(); i++) {
+        output_i = output[i].To8BitData();
+        output_temp = output_i.ToStdString(wxConvUTF8);
+        BOOST_LOG_TRIVIAL(info) << "ping www.apple.com:" << output_temp;
+    }
+    wxExecute("ping www.bambulab.com", output, wxEXEC_NODISABLE);
+    for (int i = 0; i < output.size(); i++) {
+        output_i = output[i].To8BitData();
+        output_temp = output_i.ToStdString(wxConvUTF8);
+        BOOST_LOG_TRIVIAL(info) << "ping bambulab:" << output_temp;
+    }
+    //Get GateWay IP
+    wxExecute("ping 192.168.0.1", output, wxEXEC_NODISABLE);
+    for (int i = 0; i < output.size(); i++) {
+        output_i = output[i].To8BitData();
+        output_temp = output_i.ToStdString(wxConvUTF8);
+        BOOST_LOG_TRIVIAL(info) << "ping 192.168.0.1:" << output_temp;
+    }
+}
 
 std::string VersionInfo::convert_full_version(std::string short_version)
 {
@@ -212,10 +246,10 @@ bool is_associate_files(std::wstring extend)
 }
 #endif
 
-class BBLSplashScreen : public wxSplashScreen
+class SplashScreen : public wxSplashScreen
 {
 public:
-    BBLSplashScreen(const wxBitmap& bitmap, long splashStyle, int milliseconds, wxPoint pos = wxDefaultPosition)
+    SplashScreen(const wxBitmap& bitmap, long splashStyle, int milliseconds, wxPoint pos = wxDefaultPosition)
         : wxSplashScreen(bitmap, splashStyle, milliseconds, static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, wxDefaultPosition, wxDefaultSize,
 #ifdef __APPLE__
             wxBORDER_NONE | wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP
@@ -422,275 +456,6 @@ private:
     m_constant_text;
 };
 
-class SplashScreen : public wxSplashScreen
-{
-public:
-    SplashScreen(const wxBitmap& bitmap, long splashStyle, int milliseconds, wxPoint pos = wxDefaultPosition)
-        : wxSplashScreen(bitmap, splashStyle, milliseconds, static_cast<wxWindow*>(wxGetApp().mainframe), wxID_ANY, wxDefaultPosition, wxDefaultSize,
-#ifdef __APPLE__
-            wxSIMPLE_BORDER | wxFRAME_NO_TASKBAR | wxSTAY_ON_TOP
-#else
-            wxSIMPLE_BORDER | wxFRAME_NO_TASKBAR
-#endif // !__APPLE__
-        )
-    {
-        wxASSERT(bitmap.IsOk());
-
-        int init_dpi = get_dpi_for_window(this);
-        this->SetPosition(pos);
-        this->CenterOnScreen();
-        int new_dpi = get_dpi_for_window(this);
-
-        m_scale         = (float)(new_dpi) / (float)(init_dpi);
-
-        m_main_bitmap   = bitmap;
-
-        scale_bitmap(m_main_bitmap, m_scale);
-
-        // init constant texts and scale fonts
-        init_constant_text();
-
-        // this font will be used for the action string
-        m_action_font = m_constant_text.credits_font.Bold();
-
-        // draw logo and constant info text
-        Decorate(m_main_bitmap);
-    }
-
-    void SetText(const wxString& text)
-    {
-        set_bitmap(m_main_bitmap);
-        if (!text.empty()) {
-            wxBitmap bitmap(m_main_bitmap);
-
-            wxMemoryDC memDC;
-            memDC.SelectObject(bitmap);
-
-            memDC.SetFont(m_action_font);
-            memDC.SetTextForeground(wxColour(237, 107, 33));
-            memDC.DrawText(text, int(m_scale * 60), m_action_line_y_position);
-
-            memDC.SelectObject(wxNullBitmap);
-            set_bitmap(bitmap);
-#ifdef __WXOSX__
-            // without this code splash screen wouldn't be updated under OSX
-            wxYield();
-#endif
-        }
-    }
-
-    static wxBitmap MakeBitmap(wxBitmap bmp)
-    {
-        if (!bmp.IsOk())
-            return wxNullBitmap;
-
-        // create dark grey background for the splashscreen
-        // It will be 5/3 of the weight of the bitmap
-        int width = lround((double)5 / 3 * bmp.GetWidth());
-        int height = bmp.GetHeight();
-
-        wxImage image(width, height);
-        unsigned char* imgdata_ = image.GetData();
-        for (int i = 0; i < width * height; ++i) {
-            *imgdata_++ = 51;
-            *imgdata_++ = 51;
-            *imgdata_++ = 51;
-        }
-
-        wxBitmap new_bmp(image);
-
-        wxMemoryDC memDC;
-        memDC.SelectObject(new_bmp);
-        memDC.DrawBitmap(bmp, width - bmp.GetWidth(), 0, true);
-
-        return new_bmp;
-    }
-
-    void Decorate(wxBitmap& bmp)
-    {
-        if (!bmp.IsOk())
-            return;
-
-        // draw text to the box at the left of the splashscreen.
-        // this box will be 2/5 of the weight of the bitmap, and be at the left.
-        int width = lround(bmp.GetWidth() * 0.4);
-
-        // load bitmap for logo
-        BitmapCache bmp_cache;
-        int logo_size = lround(width * 0.25);
-        wxBitmap logo_bmp = *bmp_cache.load_svg(wxGetApp().logo_name(), logo_size, logo_size);
-
-        wxCoord margin = int(m_scale * 20);
-
-        wxRect banner_rect(wxPoint(0, logo_size), wxPoint(width, bmp.GetHeight()));
-        banner_rect.Deflate(margin, 2 * margin);
-
-        // use a memory DC to draw directly onto the bitmap
-        wxMemoryDC memDc(bmp);
-
-        // draw logo
-        memDc.DrawBitmap(logo_bmp, margin, margin, true);
-
-        // draw the (white) labels inside of our black box (at the left of the splashscreen)
-        memDc.SetTextForeground(wxColour(255, 255, 255));
-
-        memDc.SetFont(m_constant_text.title_font);
-        memDc.DrawLabel(m_constant_text.title,   banner_rect, wxALIGN_TOP | wxALIGN_LEFT);
-
-        int title_height = memDc.GetTextExtent(m_constant_text.title).GetY();
-        banner_rect.SetTop(banner_rect.GetTop() + title_height);
-        banner_rect.SetHeight(banner_rect.GetHeight() - title_height);
-
-        memDc.SetFont(m_constant_text.version_font);
-        memDc.DrawLabel(m_constant_text.version, banner_rect, wxALIGN_TOP | wxALIGN_LEFT);
-        int version_height = memDc.GetTextExtent(m_constant_text.version).GetY();
-
-        memDc.SetFont(m_constant_text.credits_font);
-        memDc.DrawLabel(m_constant_text.credits, banner_rect, wxALIGN_BOTTOM | wxALIGN_LEFT);
-        int credits_height = memDc.GetMultiLineTextExtent(m_constant_text.credits).GetY();
-        int text_height    = memDc.GetTextExtent("text").GetY();
-
-        // calculate position for the dynamic text
-        int logo_and_header_height = margin + logo_size + title_height + version_height;
-        m_action_line_y_position = logo_and_header_height + 0.5 * (bmp.GetHeight() - margin - credits_height - logo_and_header_height - text_height);
-    }
-
-private:
-    wxBitmap    m_main_bitmap;
-    wxFont      m_action_font;
-    int         m_action_line_y_position;
-    float       m_scale {1.0};
-
-    struct ConstantText
-    {
-        wxString title;
-        wxString version;
-        wxString credits;
-
-        wxFont   title_font;
-        wxFont   version_font;
-        wxFont   credits_font;
-
-        void init(wxFont init_font)
-        {
-            // title
-            title = wxGetApp().is_editor() ? SLIC3R_APP_FULL_NAME : GCODEVIEWER_APP_NAME;
-
-            // dynamically get the version to display
-// #if BBL_INTERNAL_TESTING
-            // version = _L("Internal Version") + " " + std::string(SLIC3R_VERSION);
-// #else
-            // version = _L("") + " " + std::string(SoftFever_VERSION);
-// #endif
-
-            // credits infornation
-            credits =   title;
-
-            title_font = version_font = credits_font = init_font;
-        }
-    }
-    m_constant_text;
-
-    void init_constant_text()
-    {
-        m_constant_text.init(get_default_font(this));
-
-        // As default we use a system font for current display.
-        // Scale fonts in respect to banner width
-
-        int text_banner_width = lround(0.4 * m_main_bitmap.GetWidth()) - roundl(m_scale * 50); // banner_width - margins
-
-        float title_font_scale = (float)text_banner_width / GetTextExtent(m_constant_text.title).GetX();
-        scale_font(m_constant_text.title_font, title_font_scale > 3.5f ? 3.5f : title_font_scale);
-
-        float version_font_scale = (float)text_banner_width / GetTextExtent(m_constant_text.version).GetX();
-        scale_font(m_constant_text.version_font, version_font_scale > 2.f ? 2.f : version_font_scale);
-
-        // The width of the credits information string doesn't respect to the banner width some times.
-        // So, scale credits_font in the respect to the longest string width
-        int   longest_string_width = word_wrap_string(m_constant_text.credits);
-        float font_scale = (float)text_banner_width / longest_string_width;
-        scale_font(m_constant_text.credits_font, font_scale);
-    }
-
-    void set_bitmap(wxBitmap& bmp)
-    {
-        m_window->SetBitmap(bmp);
-        m_window->Refresh();
-        m_window->Update();
-    }
-
-    void scale_bitmap(wxBitmap& bmp, float scale)
-    {
-        if (scale == 1.0)
-            return;
-
-        wxImage image = bmp.ConvertToImage();
-        if (!image.IsOk() || image.GetWidth() == 0 || image.GetHeight() == 0)
-            return;
-
-        int width   = int(scale * image.GetWidth());
-        int height  = int(scale * image.GetHeight());
-        image.Rescale(width, height, wxIMAGE_QUALITY_BILINEAR);
-
-        bmp = wxBitmap(std::move(image));
-    }
-
-    void scale_font(wxFont& font, float scale)
-    {
-#ifdef __WXMSW__
-        // Workaround for the font scaling in respect to the current active display,
-        // not for the primary display, as it's implemented in Font.cpp
-        // See https://github.com/wxWidgets/wxWidgets/blob/master/src/msw/font.cpp
-        // void wxNativeFontInfo::SetFractionalPointSize(float pointSizeNew)
-        wxNativeFontInfo nfi= *font.GetNativeFontInfo();
-        float pointSizeNew  = scale * font.GetPointSize();
-        nfi.lf.lfHeight     = nfi.GetLogFontHeightAtPPI(pointSizeNew, get_dpi_for_window(this));
-        nfi.pointSize       = pointSizeNew;
-        font = wxFont(nfi);
-#else
-        font.Scale(scale);
-#endif //__WXMSW__
-    }
-
-    // wrap a string for the strings no longer then 55 symbols
-    // return extent of the longest string
-    int word_wrap_string(wxString& input)
-    {
-        size_t line_len = 55;// count of symbols in one line
-        int idx = -1;
-        size_t cur_len = 0;
-
-        wxString longest_sub_string;
-        auto get_longest_sub_string = [input](wxString &longest_sub_str, size_t cur_len, size_t i) {
-            if (cur_len > longest_sub_str.Len())
-                longest_sub_str = input.SubString(i - cur_len + 1, i);
-        };
-
-        for (size_t i = 0; i < input.Len(); i++)
-        {
-            cur_len++;
-            if (input[i] == ' ')
-                idx = i;
-            if (input[i] == '\n')
-            {
-                get_longest_sub_string(longest_sub_string, cur_len, i);
-                idx = -1;
-                cur_len = 0;
-            }
-            if (cur_len >= line_len && idx >= 0)
-            {
-                get_longest_sub_string(longest_sub_string, cur_len, i);
-                input[idx] = '\n';
-                cur_len = i - static_cast<size_t>(idx);
-            }
-        }
-
-        return GetTextExtent(longest_sub_string).GetX();
-    }
-};
-
-
 #ifdef __linux__
 bool static check_old_linux_datadir(const wxString& app_name) {
     // If we are on Linux and the datadir does not exist yet, look into the old
@@ -743,9 +508,11 @@ static const FileWildcards file_wildcards_by_type[FT_SIZE] = {
     /* FT_3MF */     { "3MF files"sv,       { ".3mf"sv } },
     /* FT_GCODE */   { "G-code files"sv,    { ".gcode"sv, ".3mf"sv } },
 #ifdef __APPLE__
-    /* FT_MODEL */   { "Supported files"sv,     { ".3mf"sv, ".stl"sv, ".stp"sv, ".step"sv, ".svg"sv, ".amf"sv, ".obj"sv , ".usd"sv, ".usda"sv, ".usdc"sv, ".usdz"sv, ".abc"sv, ".ply"sv} },
+    /* FT_MODEL */
+    {"Supported files"sv, {".3mf"sv, ".stl"sv, ".oltp"sv, ".stp"sv, ".step"sv, ".svg"sv, ".amf"sv, ".obj"sv, ".usd"sv, ".usda"sv, ".usdc"sv, ".usdz"sv, ".abc"sv, ".ply"sv}},
 #else
-    /* FT_MODEL */   {"Supported files"sv,  {".3mf"sv, ".stl"sv, ".stp"sv, ".step"sv, ".svg"sv, ".amf"sv, ".obj"sv }},
+    /* FT_MODEL */
+    {"Supported files"sv, {".3mf"sv, ".stl"sv, ".oltp"sv, ".stp"sv, ".step"sv, ".svg"sv, ".amf"sv, ".obj"sv}},
 #endif
     /* FT_PROJECT */ { "Project files"sv,   { ".3mf"sv} },
     /* FT_GALLERY */ { "Known files"sv,     { ".stl"sv, ".obj"sv } },
@@ -1262,8 +1029,7 @@ void GUI_App::post_init()
         });
 
 
-    std::string filaments_blacklist_config_file = Slic3r::resources_dir() + "/printers/filaments_blacklist.json";
-    DeviceManager::load_filaments_blacklist_config(encode_path(filaments_blacklist_config_file.c_str()));
+    DeviceManager::load_filaments_blacklist_config();
 
     // remove old log files over LOG_FILES_MAX_NUM
     std::string log_addr = data_dir();
@@ -1703,7 +1469,7 @@ int GUI_App::install_plugin(std::string name, std::string package_name, InstallP
     if (pro_fn)
         pro_fn(InstallStatusInstallCompleted, 100, cancel);
     if (name == "plugins")
-        app_config->set_str("app", "installed_networking", "1");
+        app_config->set_bool("installed_networking", true);
     BOOST_LOG_TRIVIAL(info) << "[install_plugin] success";
     return 0;
 }
@@ -2169,6 +1935,8 @@ void GUI_App::init_app_config()
         }
 #endif // _WIN32
     }
+    set_logging_level(Slic3r::level_string_to_boost(app_config->get("log_severity_level")));
+
 }
 
 // returns true if found newer version and user agreed to use it
@@ -2202,7 +1970,7 @@ std::map<std::string, std::string> GUI_App::get_extra_header()
     extra_headers.insert(std::make_pair("X-BBL-OS-Version", os_version));
     if (app_config)
         extra_headers.insert(std::make_pair("X-BBL-Device-ID", app_config->get("slicer_uuid")));
-    extra_headers.insert(std::make_pair("X-BBL-Language", convert_studio_language_to_api(app_config->get("language"))));
+    extra_headers.insert(std::make_pair("X-BBL-Language", convert_studio_language_to_api(into_u8(current_language_code_safe()))));
     return extra_headers;
 }
 
@@ -2295,6 +2063,28 @@ int GUI_App::OnExit()
         m_agent = nullptr;
     }
 
+    // Orca: clean up encrypted bbl network log file if plugin is used
+    // No point to keep them as they are encrypted and can't be used for debugging
+    try {
+        auto              log_folder  = boost::filesystem::path(data_dir()) / "log";
+        const std::string filePattern = R"(debug_network_.*\.log\.enc)";
+        std::regex        pattern(filePattern);
+        if (boost::filesystem::exists(log_folder)) {
+            std::vector<boost::filesystem::path> network_logs;
+            for (auto& it : boost::filesystem::directory_iterator(log_folder)) {
+                auto temp_path = it.path();
+                if (boost::filesystem::is_regular_file(temp_path) && std::regex_match(temp_path.filename().string(), pattern)) {
+                    network_logs.push_back(temp_path.filename());
+                }
+            }
+            for (auto f : network_logs) {
+                boost::filesystem::remove(f);
+            }
+        }
+    } catch (...) {
+        BOOST_LOG_TRIVIAL(error) << "Failed to clean up encrypt bbl network log file";
+    }
+
     return wxApp::OnExit();
 }
 
@@ -2358,9 +2148,6 @@ bool GUI_App::on_init_inner()
         for (auto d : dialogStack)
             d->EndModal(wxID_ABORT);
     });
-
-    std::map<std::string, std::string> extra_headers = get_extra_header();
-    Slic3r::Http::set_extra_headers(extra_headers);
 
     // Verify resources path
     const wxString resources_dir = from_u8(Slic3r::resources_dir());
@@ -2469,11 +2256,11 @@ bool GUI_App::on_init_inner()
         app_config->set("version", SLIC3R_VERSION);
     }
 
-    BBLSplashScreen * scrn = nullptr;
+    SplashScreen * scrn = nullptr;
     if (app_config->get("show_splash_screen") == "true") {
         // make a bitmap with dark grey banner on the left side
         //BBS make BBL splash screen bitmap
-        wxBitmap bmp = BBLSplashScreen::MakeBitmap();
+        wxBitmap bmp = SplashScreen::MakeBitmap();
         // Detect position (display) to show the splash screen
         // Now this position is equal to the mainframe position
         wxPoint splashscreen_pos = wxDefaultPosition;
@@ -2485,7 +2272,7 @@ bool GUI_App::on_init_inner()
 
         BOOST_LOG_TRIVIAL(info) << "begin to show the splash screen...";
         //BBS use BBL splashScreen
-        scrn = new BBLSplashScreen(bmp, wxSPLASH_CENTRE_ON_SCREEN | wxSPLASH_TIMEOUT, 10000, splashscreen_pos);
+        scrn = new SplashScreen(bmp, wxSPLASH_CENTRE_ON_SCREEN | wxSPLASH_TIMEOUT, 1500, splashscreen_pos);
 #ifndef __linux__
         wxYield();
 #endif
@@ -2623,6 +2410,10 @@ bool GUI_App::on_init_inner()
     Bind(EVT_CHECK_PRIVACY_SHOW, &GUI_App::show_check_privacy_dlg, this);
 
     Bind(EVT_SHOW_IP_DIALOG, &GUI_App::show_ip_address_enter_dialog_handler, this);
+
+
+    std::map<std::string, std::string> extra_headers = get_extra_header();
+    Slic3r::Http::set_extra_headers(extra_headers);
 
     copy_network_if_available();
     on_init_network();
@@ -2793,8 +2584,6 @@ bool GUI_App::on_init_inner()
                        "The OrcaSlicer configuration file may be corrupted and cannot be parsed.\nOrcaSlicer has attempted to recreate the "
                        "configuration file.\nPlease note, application settings will be lost, but printer profiles will not be affected."));
     }
-    //BBS: delete splash screen
-    delete scrn;
     return true;
 }
 
@@ -2802,7 +2591,7 @@ void GUI_App::copy_network_if_available()
 {
     if (app_config->get("update_network_plugin") != "true")
         return;
-    std::string network_library, player_library, network_library_dst, player_library_dst;
+    std::string network_library, player_library, live555_library, network_library_dst, player_library_dst, live555_library_dst;
     std::string data_dir_str = data_dir();
     boost::filesystem::path data_dir_path(data_dir_str);
     auto plugin_folder = data_dir_path / "plugins";
@@ -2810,19 +2599,25 @@ void GUI_App::copy_network_if_available()
     std::string changelog_file = cache_folder.string() + "/network_plugins.json";
 #if defined(_MSC_VER) || defined(_WIN32)
     network_library = cache_folder.string() + "/bambu_networking.dll";
-    player_library = cache_folder.string() + "/BambuSource.dll";
+    player_library      = cache_folder.string() + "/BambuSource.dll";
+    live555_library     = cache_folder.string() + "/live555.dll";
     network_library_dst = plugin_folder.string() + "/bambu_networking.dll";
-    player_library_dst = plugin_folder.string() + "/BambuSource.dll";
+    player_library_dst  = plugin_folder.string() + "/BambuSource.dll";
+    live555_library_dst = plugin_folder.string() + "/live555.dll";
 #elif defined(__WXMAC__)
     network_library = cache_folder.string() + "/libbambu_networking.dylib";
     player_library = cache_folder.string() + "/libBambuSource.dylib";
+    live555_library = cache_folder.string() + "/liblive555.dylib";
     network_library_dst = plugin_folder.string() + "/libbambu_networking.dylib";
     player_library_dst = plugin_folder.string() + "/libBambuSource.dylib";
+    live555_library_dst = plugin_folder.string() + "/liblive555.dylib";
 #else
     network_library = cache_folder.string() + "/libbambu_networking.so";
-    player_library = cache_folder.string() + "/libBambuSource.so";
+    player_library      = cache_folder.string() + "/libBambuSource.so";
+    live555_library     = cache_folder.string() + "/liblive555.so";
     network_library_dst = plugin_folder.string() + "/libbambu_networking.so";
-    player_library_dst = plugin_folder.string() + "/libBambuSource.so";
+    player_library_dst  = plugin_folder.string() + "/libBambuSource.so";
+    live555_library_dst = plugin_folder.string() + "/liblive555.so";
 #endif
 
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__<< ": checking network_library " << network_library << ", player_library " << player_library;
@@ -2856,6 +2651,19 @@ void GUI_App::copy_network_if_available()
         fs::remove(player_library);
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__<< ": Copying player library from" << player_library << " to " << player_library_dst<<" successfully.";
     }
+
+    if (boost::filesystem::exists(live555_library)) {
+        CopyFileResult cfr = copy_file(live555_library, live555_library_dst, error_message, false);
+        if (cfr != CopyFileResult::SUCCESS) {
+            BOOST_LOG_TRIVIAL(error) << __FUNCTION__<< ": Copying failed(" << cfr << "): " << error_message;
+            return;
+        }
+
+        static constexpr const auto perms = fs::owner_read | fs::owner_write | fs::group_read | fs::others_read;
+        fs::permissions(live555_library_dst, perms);
+        fs::remove(live555_library);
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__<< ": Copying live555 library from" << live555_library << " to " << live555_library_dst<<" successfully.";
+    }
     if (boost::filesystem::exists(changelog_file))
         fs::remove(changelog_file);
     app_config->set("update_network_plugin", "false");
@@ -2863,6 +2671,11 @@ void GUI_App::copy_network_if_available()
 
 bool GUI_App::on_init_network(bool try_backup)
 {
+    auto should_load_networking_plugin = app_config->get_bool("installed_networking");
+    if(!should_load_networking_plugin) {
+        BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "Don't load plugin as installed_networking is false";
+        return false;
+    }
     int load_agent_dll = Slic3r::NetworkAgent::initialize_network_module();
     bool create_network_agent = false;
 __retry:
@@ -2874,7 +2687,7 @@ __retry:
             if (!bambu_source) {
                 BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": can not get bambu source module!";
                 m_networking_compatible = false;
-                if (app_config->get("installed_networking") == "1") {
+                if (should_load_networking_plugin) {
                     m_networking_need_update = true;
                 }
             }
@@ -2889,13 +2702,13 @@ __retry:
                 goto __retry;
             }
             BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": on_init_network, version dismatch, need upload network module";
-            if (app_config->get("installed_networking") == "1") {
+            if (should_load_networking_plugin) {
                 m_networking_need_update = true;
             }
         }
     } else {
         BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": on_init_network, load dll failed";
-        if (app_config->get("installed_networking") == "1") {
+        if (should_load_networking_plugin) {
             BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << ": on_init_network, need upload network module";
             m_networking_need_update = true;
         }
@@ -3378,7 +3191,10 @@ void GUI_App::check_printer_presets()
 #endif
 }
 
-void GUI_App::recreate_GUI(const wxString& msg_name)
+void switch_window_pools();
+void release_window_pools();
+
+void GUI_App::recreate_GUI(const wxString &msg_name)
 {
     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << "recreate_GUI enter";
     m_is_recreating_gui = true;
@@ -3386,12 +3202,18 @@ void GUI_App::recreate_GUI(const wxString& msg_name)
     update_http_extra_header();
 
     mainframe->shutdown();
-
     ProgressDialog dlg(msg_name, msg_name, 100, nullptr, wxPD_AUTO_HIDE);
     dlg.Pulse();
     dlg.Update(10, _L("Rebuild") + dots);
 
     MainFrame *old_main_frame = mainframe;
+    struct ClientData : wxClientData
+    {
+        ~ClientData() { release_window_pools(); }
+    };
+    old_main_frame->SetClientObject(new ClientData);
+
+    switch_window_pools();
     mainframe = new MainFrame();
     if (is_editor())
         // hide settings tabs after first Layout
@@ -3455,11 +3277,12 @@ void GUI_App::ShowUserGuide() {
     try {
         bool res = false;
         GuideFrame GuideDlg(this);
-        //if (GuideDlg.IsFirstUse())
+                //if (GuideDlg.IsFirstUse())
         res = GuideDlg.run();
-        if (res) {
+if (res) {
             load_current_presets();
             update_publish_status();
+            mainframe->refresh_plugin_tips();
             // BBS: remove SLA related message
         }
     } catch (std::exception &e) {
@@ -3709,6 +3532,7 @@ void GUI_App::get_login_info()
             wxString strJS = wxString::Format("window.postMessage(%s)", logout_cmd);
             GUI::wxGetApp().run_script(strJS);
         }
+        mainframe->m_webview->SetLoginPanelVisibility(true);
     }
 }
 
@@ -5516,6 +5340,7 @@ void GUI_App::open_preferences(size_t open_on_tab, const std::string& highlight_
         // so we put it into an inner scope
         PreferencesDialog dlg(mainframe, open_on_tab, highlight_option);
         dlg.ShowModal();
+        this->plater_->get_current_canvas3D()->force_set_focus();
         // BBS
         //app_layout_changed = dlg.settings_layout_changed();
 #if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
@@ -6174,6 +5999,15 @@ int GUI_App::filaments_cnt() const
     return preset_bundle->filament_presets.size();
 }
 
+PrintSequence GUI_App::global_print_sequence() const
+{
+    PrintSequence global_print_seq = PrintSequence::ByDefault;
+    auto curr_preset_config = preset_bundle->prints.get_edited_preset().config;
+    if (curr_preset_config.has("print_sequence"))
+        global_print_seq = curr_preset_config.option<ConfigOptionEnum<PrintSequence>>("print_sequence")->value;
+    return global_print_seq;
+}
+
 wxString GUI_App::current_language_code_safe() const
 {
 	// Translate the language code to a code, for which Prusa Research maintains translations.
@@ -6192,6 +6026,7 @@ wxString GUI_App::current_language_code_safe() const
 		{ "uk", 	"uk_UA", },
 		{ "zh", 	"zh_CN", },
 		{ "ru", 	"ru_RU", },
+        { "tr", 	"tr_TR", },
 	};
 	wxString language_code = this->current_language_code().BeforeFirst('_');
 	auto it = mapping.find(language_code);
@@ -6247,6 +6082,7 @@ bool GUI_App::run_wizard(ConfigWizard::RunReason reason, ConfigWizard::StartPage
     if (res) {
         load_current_presets();
         update_publish_status();
+        mainframe->refresh_plugin_tips();
         // BBS: remove SLA related message
     }
 

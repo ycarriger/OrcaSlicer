@@ -207,7 +207,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
         set_max_recent_count((int)max_recent_count);
 
     //reset log level
-    auto loglevel = wxGetApp().app_config->get("severity_level");
+    auto loglevel = wxGetApp().app_config->get("log_severity_level");
     Slic3r::set_logging_level(Slic3r::level_string_to_boost(loglevel));
 
     // BBS
@@ -562,7 +562,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
             m_print_enable = get_enable_print_status();
             m_print_btn->Enable(m_print_enable);
             if (m_print_enable) {
-                if (wxGetApp().preset_bundle->is_bbl_vendor())
+                if (wxGetApp().preset_bundle->use_bbl_network())
                     wxPostEvent(m_plater, SimpleEvent(EVT_GLTOOLBAR_PRINT_PLATE));
                 else
                     wxPostEvent(m_plater, SimpleEvent(EVT_GLTOOLBAR_SEND_GCODE));
@@ -589,6 +589,7 @@ DPIFrame(NULL, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, BORDERLESS_FRAME_
         {
             PreferencesDialog dlg(this);
             dlg.ShowModal();
+            plater()->get_current_canvas3D()->force_set_focus();
 #if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
             if (dlg.seq_top_layer_only_changed() || dlg.seq_seq_top_gcode_indices_changed())
 #else
@@ -989,30 +990,6 @@ void MainFrame::init_tabpanel() {
     m_tabpanel->Hide();
     m_settings_dialog.set_tabpanel(m_tabpanel);
 
-    m_tabpanel->Bind(wxEVT_NOTEBOOK_PAGE_CHANGING, [this](wxBookCtrlEvent &e) {
-      int old_sel = e.GetOldSelection();
-      int new_sel = e.GetSelection();
-      if (wxGetApp().preset_bundle && wxGetApp().preset_bundle->is_bbl_vendor() && new_sel == tpMonitor) {
-          if (!wxGetApp().getAgent()) {
-              e.Veto();
-              BOOST_LOG_TRIVIAL(info) << boost::format("skipped tab switch from %1% to %2%, lack of network plugins") % old_sel % new_sel;
-              if (m_plater) {
-                  wxCommandEvent *evt = new wxCommandEvent(EVT_INSTALL_PLUGIN_HINT);
-                  wxQueueEvent(m_plater, evt);
-              }
-          }
-      } else {
-          if (new_sel == tpMonitor && wxGetApp().preset_bundle != nullptr) {
-              auto     cfg = wxGetApp().preset_bundle->printers.get_edited_preset().config;
-              wxString url = cfg.opt_string("print_host_webui").empty() ? cfg.opt_string("print_host") : cfg.opt_string("print_host_webui");
-              if (url.empty()) {
-                  wxString url = wxString::Format("file://%s/web/orca/missing_connection.html", from_u8(resources_dir()));
-                  m_printer_view->load_url(url);
-              }
-          }
-      }
-    });
-
 #ifdef __WXMSW__
     m_tabpanel->Bind(wxEVT_BOOKCTRL_PAGE_CHANGED, [this](wxBookCtrlEvent& e) {
 #else
@@ -1104,7 +1081,7 @@ void MainFrame::init_tabpanel() {
     
     m_project = new ProjectPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     m_project->SetBackgroundColour(*wxWHITE);
-    m_tabpanel->AddPage(m_project, _L("Project"), std::string("tab_auxiliary_avtice"), std::string("tab_auxiliary_avtice"), false);
+    m_tabpanel->AddPage(m_project, _L("Project"), std::string("tab_auxiliary_active"), std::string("tab_auxiliary_active"), false);
 
     m_calibration = new CalibrationPanel(m_tabpanel, wxID_ANY, wxDefaultPosition, wxDefaultSize);
     m_calibration->SetBackgroundColour(*wxWHITE);
@@ -1624,7 +1601,7 @@ wxBoxSizer* MainFrame::create_side_tools()
             SidePopup* p = new SidePopup(this);
 
             if (wxGetApp().preset_bundle
-                && !wxGetApp().preset_bundle->is_bbl_vendor()) {
+                && !wxGetApp().preset_bundle->use_bbl_network()) {
                 // ThirdParty Buttons
                 SideButton* export_gcode_btn = new SideButton(p, _L("Export G-code file"), "");
                 export_gcode_btn->SetCornerRadius(0);
@@ -2727,6 +2704,7 @@ void MainFrame::init_menubar_as_editor()
         [this](wxCommandEvent &) {
             PreferencesDialog dlg(this);
             dlg.ShowModal();
+            plater()->get_current_canvas3D()->force_set_focus();
 #if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
             if (dlg.seq_top_layer_only_changed() || dlg.seq_seq_top_gcode_indices_changed())
 #else
@@ -2753,6 +2731,7 @@ void MainFrame::init_menubar_as_editor()
         [this](wxCommandEvent &) {
             PreferencesDialog dlg(this);
             dlg.ShowModal();
+            plater()->get_current_canvas3D()->force_set_focus();
 #if ENABLE_GCODE_LINES_ID_IN_H_SLIDER
             if (dlg.seq_top_layer_only_changed() || dlg.seq_seq_top_gcode_indices_changed())
 #else
@@ -3608,7 +3587,7 @@ void MainFrame::load_printer_url(wxString url, wxString apikey)
 void MainFrame::load_printer_url()
 {
     PresetBundle &preset_bundle = *wxGetApp().preset_bundle;
-    if (preset_bundle.is_bbl_vendor())
+    if (preset_bundle.use_bbl_network())
         return;
 
     auto     cfg = preset_bundle.printers.get_edited_preset().config;
