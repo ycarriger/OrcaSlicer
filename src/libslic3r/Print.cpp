@@ -845,21 +845,21 @@ StringObjectException Print::sequential_print_clearance_valid(const Print &print
                 too_tall_instances[inst] = std::make_pair(print_instance_with_bounding_box[k].hull_polygon, unscaled<double>(height));
         }
 
-        if (too_tall_instances.size() > 0) {
-            //return {, inst->model_instance->get_object()};
-            for (auto& iter: too_tall_instances) {
-                if (single_object_exception.string.empty()) {
-                    single_object_exception.string = (boost::format(L("%1% is too tall, and collisions will be caused.")) %iter.first->model_instance->get_object()->name).str();
-                    single_object_exception.object = iter.first->model_instance->get_object();
-                }
-                else {
-                    single_object_exception.string += "\n" + (boost::format(L("%1% is too tall, and collisions will be caused.")) %iter.first->model_instance->get_object()->name).str();
-                    single_object_exception.object = nullptr;
-                }
-                if (height_polygons)
-                    height_polygons->emplace_back(std::move(iter.second));
-            }
-        }
+        //if (too_tall_instances.size() > 0) {
+        //    //return {, inst->model_instance->get_object()};
+        //    for (auto& iter: too_tall_instances) {
+        //        if (single_object_exception.string.empty()) {
+        //            single_object_exception.string = (boost::format(L("%1% is too tall, and collisions will be caused.")) %iter.first->model_instance->get_object()->name).str();
+        //            single_object_exception.object = iter.first->model_instance->get_object();
+        //        }
+        //        else {
+        //            single_object_exception.string += "\n" + (boost::format(L("%1% is too tall, and collisions will be caused.")) %iter.first->model_instance->get_object()->name).str();
+        //            single_object_exception.object = nullptr;
+        //        }
+        //        if (height_polygons)
+        //            height_polygons->emplace_back(std::move(iter.second));
+        //    }
+        //}
     }
 
     return single_object_exception;
