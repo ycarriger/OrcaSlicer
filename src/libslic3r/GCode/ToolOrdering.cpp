@@ -1002,7 +1002,7 @@ void ToolOrdering::assign_custom_gcodes(const Print &print)
 	auto 						custom_gcode_it = custom_gcode_per_print_z.gcodes.rbegin();
 	// Tool changes and color changes will be ignored, if the model's tool/color changes were entered in mm mode and the print is in non mm mode
 	// or vice versa.
-	bool 						ignore_tool_and_color_changes = (mode == CustomGCode::MultiExtruder) != (model_mode == CustomGCode::MultiExtruder);
+    bool ignore_tool_and_color_changes = false;      //(mode == CustomGCode::MultiExtruder) != (model_mode == CustomGCode::MultiExtruder);
 	// If printing on a single extruder machine, make the tool changes trigger color change (M600) events.
 	bool 						tool_changes_as_color_changes = mode == CustomGCode::SingleExtruder && model_mode == CustomGCode::MultiAsSingle;
 

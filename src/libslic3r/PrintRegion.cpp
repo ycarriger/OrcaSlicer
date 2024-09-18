@@ -67,8 +67,8 @@ void PrintRegion::collect_object_printing_extruders(const PrintConfig &print_con
     // BBS
     auto num_extruders = (int)print_config.filament_diameter.size();
     auto emplace_extruder = [num_extruders, &object_extruders](int extruder_id) {
-    	int i = std::max(0, extruder_id - 1);
-        object_extruders.emplace_back((i >= num_extruders) ? 0 : i);
+    	//int i = std::max(0, extruder_id - 1);
+        object_extruders.emplace_back((extruder_id >= num_extruders) ? 0 : extruder_id);
     };
     if (region_config.wall_loops.value > 0 || has_brim)
     	emplace_extruder(region_config.wall_filament);
