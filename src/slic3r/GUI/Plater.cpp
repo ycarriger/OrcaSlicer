@@ -1858,7 +1858,7 @@ void Sidebar::show_SEMM_buttons(bool bshow)
 void Sidebar::update_dynamic_filament_list()
 {
     dynamic_filament_list.update();
-    dynamic_filament_list_1_based.update();
+    //dynamic_filament_list_1_based.update();
 }
 
 ObjectList* Sidebar::obj_list()
