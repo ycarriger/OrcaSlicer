@@ -1534,7 +1534,7 @@ void TreeSupport::generate_toolpaths()
 
                     if (layer_id != 0 && area_group.type != SupportLayer::BaseType) {
                         // interface
-                        if (layer_id == 0) { // not working...
+                        if (layer_id == 0) { 
                             Flow flow = m_raft_layers == 0 ? m_object->print()->brim_flow() : support_flow;
                             make_perimeter_and_inner_brim(ts_layer->support_fills.entities, poly, wall_count, flow,
                                                           area_group.type == SupportLayer::RoofType ? erSupportMaterialInterface :
@@ -1542,13 +1542,15 @@ void TreeSupport::generate_toolpaths()
                             polys = std::move(offset_ex(poly, -flow.scaled_spacing()));
                         } else if (area_group.type == SupportLayer::Roof1stLayer) {
                             polys = std::move(offset_ex(poly, 0.5*support_flow.scaled_width()));
+                            fill_params.density     = interface_density;
+                            fill_params.dont_adjust = true;
                         }
                         else {
                             polys.push_back(poly);
+                            fill_params.density     = interface_density;
+                            fill_params.dont_adjust = true;
                         }
-
-                        fill_params.density     = interface_density;
-                        fill_params.dont_adjust = true;
+                        
                     }
                     if (layer_id != 0 && area_group.type == SupportLayer::Roof1stLayer) {
                         // roof_1st_layer
@@ -1587,9 +1589,9 @@ void TreeSupport::generate_toolpaths()
                         // base_areas
                         Flow flow               = (layer_id == 0 && m_raft_layers == 0) ? m_object->print()->brim_flow() : support_flow;
                         bool need_infill = with_infill;
-                        if(m_object_config->support_base_pattern==smpDefault)
+                        if (m_object_config->support_base_pattern == smpDefault)
                             need_infill &= area_group.need_infill;
-                        if (layer_id>0 && area_group.dist_to_top < 10 && !need_infill && support_style!=smsTreeHybrid) {
+                        if (layer_id>0 && area_group.dist_to_top < 10 && !need_infill && support_style!= smsTreeHybrid) {
                             if (area_group.dist_to_top < 5)  // 1 wall at the top <5mm
                                 make_perimeter_and_inner_brim(ts_layer->support_fills.entities, poly, 1, flow, erSupportMaterial);
                             else // at least 2 walls for range [5,10)
@@ -2895,31 +2897,26 @@ void TreeSupport::drop_nodes(std::vector<std::vector<Node*>>& contact_nodes)
                     continue;
                 }
 
-                //If the branch falls completely inside a collision area (the entire branch would be removed by the X/Y offset), delete it.
-                if (group_index > 0 && is_inside_ex(m_ts_data->get_collision(m_ts_data->m_xy_distance, layer_nr), node.position))
-                {
+                // If the branch falls completely inside a collision area (the entire branch would be removed by the X/Y offset), delete it.
+                if (group_index > 0 && is_inside_ex(m_ts_data->get_collision(m_ts_data->m_xy_distance, layer_nr), node.position)) {
                     const coordf_t branch_radius_node = calc_branch_radius(branch_radius, node.dist_mm_to_top, diameter_angle_scale_factor);
-                    Point to_outside = projection_onto(m_ts_data->get_collision(m_ts_data->m_xy_distance, layer_nr), node.position);
+                    Point  to_outside       = projection_onto(m_ts_data->get_collision(m_ts_data->m_xy_distance, layer_nr), node.position);
                     double dist2_to_outside = vsize2_with_unscale(node.position - to_outside);
-                    if (dist2_to_outside >= branch_radius_node * branch_radius_node) //Too far inside.
+                    if (dist2_to_outside >= branch_radius_node * branch_radius_node) // Too far inside.
                     {
-                        if (support_on_buildplate_only)
-                        {
-                            unsupported_branch_leaves.push_front({ layer_nr, p_node });
-                        } else if (bottom_interface_layers > 0) {
+                        if (support_on_buildplate_only) {
+                            unsupported_branch_leaves.push_front({layer_nr, p_node});
+                        } else {
                             Node* pn = p_node;
-
                             for (int i = 0; i <= bottom_interface_layers && pn; i++, pn = pn->parent)
-                                pn->support_floor_layers_above = bottom_interface_layers - i + 1; // +1 so the parent node has support_floor_layers_above=2
+                                pn->support_floor_layers_above = bottom_interface_layers - i +
+                                                                 1; // +1 so the parent node has support_floor_layers_above=2
                             to_delete.insert(p_node);
                         }
-                        // ToDo: May be better to leave this and Not comment continue out
-                        //continue;
+                        continue;
                     }
                     // if the link between parent and current is cut by contours, mark current as bottom contact node
-                    if (bottom_interface_layers > 0 && p_node->parent &&
-                        intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty() == false)
-                    {
+                    if (p_node->parent && intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty() == false) {
                         Node* pn = p_node->parent;
                         for (int i = 0; i <= bottom_interface_layers && pn; i++, pn = pn->parent)
                             pn->support_floor_layers_above = bottom_interface_layers - i + 1;
