@@ -1466,6 +1466,7 @@ void TreeSupport::generate_toolpaths()
         raft_areas = offset_ex(raft_areas, -flow.scaled_spacing() / 2.);
     }
 
+    // Raft
     for (size_t layer_nr = 0; layer_nr < m_slicing_params.base_raft_layers; layer_nr++) {
         SupportLayer *ts_layer = m_object->get_support_layer(layer_nr);
         coordf_t expand_offset = (layer_nr == 0 ? 0. : -1.);
@@ -1571,9 +1572,9 @@ void TreeSupport::generate_toolpaths()
                             filler_interface.get(), fill_params, erSupportMaterialInterface, m_support_material_interface_flow);
                     } else if (area_group.type == SupportLayer::RoofType) {
                         // roof_areas
-                        fill_params.density       = interface_density;
-                        filler_interface->spacing = m_support_material_interface_flow.spacing();
-                        if (m_object_config->support_interface_pattern == smipGrid) {
+                        fill_params.density       = layer_id != 0 ? interface_density : (float)1;
+                        filler_interface->spacing = m_object->print()->brim_flow().spacing(); // m_support_material_interface_flow.spacing();
+                        if (layer_id != 0 && m_object_config->support_interface_pattern == smipGrid) {
                             filler_interface->angle = Geometry::deg2rad(object_config.support_angle.value);
                             fill_params.dont_sort = true;
                         }
@@ -2906,17 +2907,18 @@ void TreeSupport::drop_nodes(std::vector<std::vector<Node*>>& contact_nodes)
                         if (support_on_buildplate_only)
                         {
                             unsupported_branch_leaves.push_front({ layer_nr, p_node });
-                        }
-                        else {
+                        } else if (bottom_interface_layers > 0) {
                             Node* pn = p_node;
                             for (int i = 0; i <= bottom_interface_layers && pn; i++, pn = pn->parent)
                                 pn->support_floor_layers_above = bottom_interface_layers - i + 1; // +1 so the parent node has support_floor_layers_above=2
                             to_delete.insert(p_node);
                         }
-                        continue;
+                        // ToDo: May be better to leave this and Not comment continue out
+                        // continue;
                     }
                     // if the link between parent and current is cut by contours, mark current as bottom contact node
-                    if (p_node->parent && intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty()==false)
+                    if (bottom_interface_layers > 0 && p_node->parent &&
+                        intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty() == false)
                     {
                         Node* pn = p_node->parent;
                         for (int i = 0; i <= bottom_interface_layers && pn; i++, pn = pn->parent)
