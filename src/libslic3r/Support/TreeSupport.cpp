@@ -1553,7 +1553,7 @@ void TreeSupport::generate_toolpaths()
                     if (area_group.type == SupportLayer::Roof1stLayer) {
                         // roof_1st_layer
                         fill_params.density = interface_density;
-                        // Note: spacing means the separation between two lines as if they are tightly extruded
+                        // Note: spacing means the separation between two lines as if they are tightly extruded                       
                         filler_Roof1stLayer->spacing = m_support_material_interface_flow.spacing();
                         // generate a perimeter first to support interface better
                         ExtrusionEntityCollection* temp_support_fills = new ExtrusionEntityCollection();
@@ -1572,9 +1572,9 @@ void TreeSupport::generate_toolpaths()
                             filler_interface.get(), fill_params, erSupportMaterialInterface, m_support_material_interface_flow);
                     } else if (area_group.type == SupportLayer::RoofType) {
                         // roof_areas
-                        fill_params.density       = layer_id != 0 ? interface_density : (float)1;
-                        filler_interface->spacing = m_object->print()->brim_flow().spacing(); // m_support_material_interface_flow.spacing();
-                        if (layer_id != 0 && m_object_config->support_interface_pattern == smipGrid) {
+                        fill_params.density       = interface_density;
+                        filler_interface->spacing = m_support_material_interface_flow.spacing();
+                        if (m_object_config->support_interface_pattern == smipGrid) {
                             filler_interface->angle = Geometry::deg2rad(object_config.support_angle.value);
                             fill_params.dont_sort = true;
                         }
@@ -2225,7 +2225,7 @@ void TreeSupport::draw_circles(const std::vector<std::vector<Node*>>& contact_no
                                     ? layers_to_top * layer_height /
                                           (scale * branch_radius) * 0.5
                                     : config.tree_support_brim_width;
-                            circle = offset(circle, scale_(brim_width))[0];
+                            circle = expand(circle, scale_(brim_width))[0];
                         }
                         area.emplace_back(ExPolygon(circle));
                         // merge overhang to get a smoother interface surface
@@ -2245,12 +2245,12 @@ void TreeSupport::draw_circles(const std::vector<std::vector<Node*>>& contact_no
 
                     if (node.distance_to_top < 0)
                         append(roof_gap_areas, area);
-                    else if (node.support_roof_layers_below == 1)
+                    else if (layer_nr > 0 && node.support_roof_layers_below == 1)
                     {
                         append(roof_1st_layer, area);
                         max_layers_above_roof1 = std::max(max_layers_above_roof1, node.dist_mm_to_top);
-                    }
-                    else if (node.support_roof_layers_below > 0)
+                    } 
+                    else if (layer_nr > 0 && node.support_roof_layers_below > 0)
                     {
                         append(roof_areas, area);
                         max_layers_above_roof = std::max(max_layers_above_roof, node.dist_mm_to_top);
@@ -2907,17 +2907,16 @@ void TreeSupport::drop_nodes(std::vector<std::vector<Node*>>& contact_nodes)
                         if (support_on_buildplate_only)
                         {
                             unsupported_branch_leaves.push_front({ layer_nr, p_node });
-                        } else if (bottom_interface_layers > 0) {
+                        } else  {
                             Node* pn = p_node;
                             for (int i = 0; i <= bottom_interface_layers && pn; i++, pn = pn->parent)
                                 pn->support_floor_layers_above = bottom_interface_layers - i + 1; // +1 so the parent node has support_floor_layers_above=2
                             to_delete.insert(p_node);
                         }
-                        // ToDo: May be better to leave this and Not comment continue out
-                        // continue;
+                        continue;
                     }
                     // if the link between parent and current is cut by contours, mark current as bottom contact node
-                    if (bottom_interface_layers > 0 && p_node->parent &&
+                    if (p_node->parent &&
                         intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty() == false)
                     {
                         Node* pn = p_node->parent;
