@@ -397,14 +397,14 @@ struct GlobalModelInfo {
 ;
 
 //Extract perimeter polygons of the given layer
-Polygons extract_perimeter_polygons(const Layer *layer, std::vector<const LayerRegion*> &corresponding_regions_out) {
+Polygons extract_perimeter_polygons(const Layer *layer, const SeamPosition &seam_position, std::vector<const LayerRegion*> &corresponding_regions_out) {
   Polygons polygons;
   for (const LayerRegion *layer_region : layer->regions()) {
     for (const ExtrusionEntity *ex_entity : layer_region->perimeters.entities) {
       if (ex_entity->is_collection()) { //collection of inner, outer, and overhang perimeters
         for (const ExtrusionEntity *perimeter : static_cast<const ExtrusionEntityCollection*>(ex_entity)->entities) {
           ExtrusionRole role = perimeter->role();
-          if (perimeter->is_loop()) {
+            if (perimeter->is_loop() && seam_position != spRandom) {
             for (const ExtrusionPath &path : static_cast<const ExtrusionLoop*>(perimeter)->paths) {
               if (path.role() == ExtrusionRole::erExternalPerimeter) {
                 role = ExtrusionRole::erExternalPerimeter;
@@ -412,7 +412,7 @@ Polygons extract_perimeter_polygons(const Layer *layer, std::vector<const LayerR
             }
           }
 
-          if (role == ExtrusionRole::erExternalPerimeter) {
+          if (role == ExtrusionRole::erExternalPerimeter || seam_position == spRandom) {
             Points p;
             perimeter->collect_points(p);
             polygons.emplace_back(std::move(p));
@@ -754,7 +754,7 @@ struct SeamComparator {
     if (a.overhang > 0.0f || b.overhang > 0.0f) {
       return a.overhang < b.overhang;
     }
-
+        
     // prefer hidden points (more than 0.5 mm inside)
     if (a.embedded_distance < -0.5f && b.embedded_distance > -0.5f) {
       return true;
@@ -813,17 +813,17 @@ struct SeamComparator {
       return a.overhang < b.overhang;
     }
 
+    if (setup == SeamPosition::spRandom) {
+        return true;
+    }
+
     // prefer hidden points (more than 0.5 mm inside)
     if (a.embedded_distance < -0.5f && b.embedded_distance > -0.5f) {
       return true;
     }
     if (b.embedded_distance < -0.5f && a.embedded_distance > -0.5f) {
       return false;
-    }
-
-    if (setup == SeamPosition::spRandom) {
-      return true;
-    }
+    }    
 
     if (setup == SeamPosition::spRear) {
       return a.position.y() + SeamPlacer::seam_align_score_tolerance * 5.0f > b.position.y();
@@ -977,7 +977,13 @@ void pick_random_seam_point(const std::vector<SeamCandidate> &perimeter_points, 
   }
 
   // now pick random point from the stored options
-  float len_sum = std::accumulate(viables.begin(), viables.end(), 0.0f, [](const float acc, const Viable &v) {
+  static std::mt19937             gen(std::time(0));
+  std::uniform_real_distribution<> dis(0, viables.size() - 1);
+
+  //auto randomIndex = dis(gen);
+  size_t point_idx   = dis(gen);
+  
+  /*float len_sum = std::accumulate(viables.begin(), viables.end(), 0.0f, [](const float acc, const Viable &v) {
     return acc + v.edge_length;
   });
   float picked_len = len_sum * rand;
@@ -986,12 +992,12 @@ void pick_random_seam_point(const std::vector<SeamCandidate> &perimeter_points, 
   while (picked_len - viables[point_idx].edge_length > 0) {
     picked_len = picked_len - viables[point_idx].edge_length;
     point_idx++;
-  }
+  }*/
 
   Perimeter &perimeter = perimeter_points[start_index].perimeter;
   perimeter.seam_index = viables[point_idx].index;
-  perimeter.final_seam_position = perimeter_points[perimeter.seam_index].position
-                                  + viables[point_idx].edge.normalized() * picked_len;
+  perimeter.final_seam_position = perimeter_points[perimeter.seam_index].position;
+                                 // + viables[point_idx].edge.normalized() * picked_len;
   perimeter.finalized = true;
 }
 
@@ -1000,13 +1006,13 @@ void pick_random_seam_point(const std::vector<SeamCandidate> &perimeter_points, 
 // Parallel process and extract each perimeter polygon of the given print object.
 // Gather SeamCandidates of each layer into vector and build KDtree over them
 // Store results in the SeamPlacer variables m_seam_per_object
-void SeamPlacer::gather_seam_candidates(const PrintObject *po, const SeamPlacerImpl::GlobalModelInfo &global_model_info) {
+void SeamPlacer::gather_seam_candidates(const PrintObject *po, const SeamPosition &seam_position , const SeamPlacerImpl::GlobalModelInfo &global_model_info) {
   using namespace SeamPlacerImpl;
   PrintObjectSeamData &seam_data = m_seam_per_object.emplace(po, PrintObjectSeamData { }).first->second;
   seam_data.layers.resize(po->layer_count());
 
   tbb::parallel_for(tbb::blocked_range<size_t>(0, po->layers().size()),
-                    [po, &global_model_info, &seam_data]
+                    [po, &seam_position, &global_model_info, &seam_data]
                     (tbb::blocked_range<size_t> r) {
                       for (size_t layer_idx = r.begin(); layer_idx < r.end(); ++layer_idx) {
                         PrintObjectSeamData::LayerSeams &layer_seams = seam_data.layers[layer_idx];
@@ -1014,7 +1020,7 @@ void SeamPlacer::gather_seam_candidates(const PrintObject *po, const SeamPlacerI
                         auto unscaled_z = layer->slice_z;
                         std::vector<const LayerRegion*> regions;
                         //NOTE corresponding region ptr may be null, if the layer has zero perimeters
-                        Polygons polygons = extract_perimeter_polygons(layer, regions);
+                        Polygons polygons = extract_perimeter_polygons(layer, seam_position, regions);
                         for (size_t poly_index = 0; poly_index < polygons.size(); ++poly_index) {
                           process_perimeter_polygon(polygons[poly_index], unscaled_z,
                                                     regions[poly_index], global_model_info, layer_seams);
@@ -1432,7 +1438,7 @@ void SeamPlacer::init(const Print &print, std::function<void(void)> throw_if_can
       throw_if_canceled_func();
       BOOST_LOG_TRIVIAL(debug)
           << "SeamPlacer: gather_seam_candidates: start";
-      gather_seam_candidates(po, global_model_info);
+      gather_seam_candidates(po, configured_seam_preference, global_model_info);
       BOOST_LOG_TRIVIAL(debug)
           << "SeamPlacer: gather_seam_candidates: end";
       throw_if_canceled_func();
