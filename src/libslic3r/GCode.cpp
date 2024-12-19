@@ -4715,6 +4715,11 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
     if (total_multipath_length > 0.0)
         m_multi_flow_segment_path_average_mm3_per_mm = weighted_sum_mm3_per_mm / total_multipath_length;
     // Orca: end of multipath average mm3_per_mm value calculation
+    // TODO: Implement Brick layering effect
+   /* if (!paths.empty() && paths.front().size() > 1 && paths.back().size() > 1 && 
+        paths.front().role() == erExternalPerimeter && region_perimeters.size() > 2) {
+        
+    }*/
     
     if (!enable_seam_slope) {
         for (ExtrusionPaths::iterator path = paths.begin(); path != paths.end(); ++path) {
@@ -4750,7 +4755,8 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
 
         // Calculate the sloped loop
         ExtrusionLoopSloped new_loop(paths, seam_gap, slope_min_length, slope_max_segment_length, start_slope_ratio, loop.loop_role());
-        new_loop.clip_slope(seam_gap);
+        // ToDo: Test if seam slope is better with or without clip
+        //new_loop.clip_slope(seam_gap);
 
         // Then extrude it
         for (const auto& p : new_loop.get_all_paths()) {
@@ -5120,7 +5126,11 @@ std::string GCode::_extrude(const ExtrusionPath &path, std::string description, 
     gcode += this->unretract();
     m_config.apply(m_calib_config);
 
-    // Orca: optimize for Klipper, set acceleration and jerk in one command
+    if (this->on_first_layer() && is_internal_perimeter(path.role())) {
+        
+    }
+
+    // Orca: optimize for Klipper, set acceleration and jerk in one command    
     unsigned int acceleration_i = 0;
     double jerk = 0;
     // adjust acceleration
