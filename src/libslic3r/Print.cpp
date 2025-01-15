@@ -129,6 +129,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "sparse_infill_acceleration",
         "internal_solid_infill_acceleration",
         // BBS
+        "supertack_plate_temp_initial_layer",
         "cool_plate_temp_initial_layer",
         "textured_cool_plate_temp_initial_layer",
         "eng_plate_temp_initial_layer",
@@ -148,6 +149,7 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
         "retraction_minimum_travel",
         "retract_before_wipe",
         "retract_when_changing_layer",
+        "retract_on_top_layer",
         "retraction_length",
         "retract_length_toolchange",
         "z_hop",
@@ -269,6 +271,8 @@ bool Print::invalidate_state_by_config_options(const ConfigOptionResolver & /* n
             || opt_key == "gcode_flavor"
             || opt_key == "single_extruder_multi_material"
             || opt_key == "nozzle_temperature"
+            // BBS
+            || opt_key == "supertack_plate_temp"
             || opt_key == "cool_plate_temp"
             || opt_key == "textured_cool_plate_temp"
             || opt_key == "eng_plate_temp"
@@ -1123,32 +1127,36 @@ StringObjectException Print::validate(StringObjectException *warning, Polygons* 
     };
 
     // Checks that the print does not exceed the max print height
-    for (size_t print_object_idx = 0; print_object_idx < m_objects.size(); ++ print_object_idx) {
-        const PrintObject &print_object = *m_objects[print_object_idx];
-        //FIXME It is quite expensive to generate object layers just to get the print height!
-        if (auto layers = generate_object_layers(print_object.slicing_parameters(), layer_height_profile(print_object_idx), print_object.config().precise_z_height.value);
-            !layers.empty()) {
+    if (0) {
+        for (size_t print_object_idx = 0; print_object_idx < m_objects.size(); ++print_object_idx) {
+            const PrintObject &print_object = *m_objects[print_object_idx];
+            // FIXME It is quite expensive to generate object layers just to get the print height!
+            if (auto layers = generate_object_layers(print_object.slicing_parameters(), layer_height_profile(print_object_idx),
+                                                     print_object.config().precise_z_height.value);
+                !layers.empty()) {
+                Vec3d        test                     = this->shrinkage_compensation();
+                const double shrinkage_compensation_z = this->shrinkage_compensation().z();
 
-            Vec3d test =this->shrinkage_compensation();
-            const double shrinkage_compensation_z = this->shrinkage_compensation().z();
-            
-            if (shrinkage_compensation_z != 1. && layers.back() > (this->config().printable_height / shrinkage_compensation_z + EPSILON)) {
-                // The object exceeds the maximum build volume height because of shrinkage compensation.
-                return StringObjectException{
+                if (shrinkage_compensation_z != 1. &&
+                    layers.back() > (this->config().printable_height / shrinkage_compensation_z + EPSILON)) {
+                    // The object exceeds the maximum build volume height because of shrinkage compensation.
+                    return StringObjectException{
                     Slic3r::format(_u8L("While the object %1% itself fits the build volume, it exceeds the maximum build volume height because of material shrinkage compensation."), print_object.model_object()->name),
                     print_object.model_object(),
                     ""
                 };
-            } else if (layers.back() > this->config().printable_height + EPSILON) {
-                // Test whether the last slicing plane is below or above the print volume.
-                return StringObjectException{
-                    0.5 * (layers[layers.size() - 2] + layers.back()) > this->config().printable_height + EPSILON ?
-                    Slic3r::format(_u8L("The object %1% exceeds the maximum build volume height."), print_object.model_object()->name) :
-                    Slic3r::format(_u8L("While the object %1% itself fits the build volume, its last layer exceeds the maximum build volume height."), print_object.model_object()->name) +
-                    " " + _u8L("You might want to reduce the size of your model or change current print settings and retry."),
-                    print_object.model_object(),
-                    ""
-                };
+                } else if (layers.back() > this->config().printable_height + EPSILON) {
+                    // Test whether the last slicing plane is below or above the print volume.
+                    return StringObjectException{
+                        0.5 * (layers[layers.size() - 2] + layers.back()) > this->config().printable_height + EPSILON ?
+                            Slic3r::format(_u8L("The object %1% exceeds the maximum build volume height."),
+                                           print_object.model_object()->name) :
+                            Slic3r::format(_u8L("While the object %1% itself fits the build volume, its last layer exceeds the maximum "
+                                                "build volume height."),
+                                           print_object.model_object()->name) +
+                                " " + _u8L("You might want to reduce the size of your model or change current print settings and retry."),
+                        print_object.model_object(), ""};
+                }
             }
         }
     }
