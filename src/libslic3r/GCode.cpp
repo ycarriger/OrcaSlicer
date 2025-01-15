@@ -4759,7 +4759,7 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
 
         // Calculate the sloped loop
         ExtrusionLoopSloped new_loop(paths, seam_gap, slope_min_length, slope_max_segment_length, start_slope_ratio, loop.loop_role());
-        new_loop.clip_slope(seam_gap);
+        //new_loop.clip_slope(seam_gap);
 
         // Then extrude it
         for (const auto& p : new_loop.get_all_paths()) {
@@ -4771,13 +4771,13 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
         }
 
         // Fix path for wipe
-        if (!new_loop.ends.empty()) {
-            paths.clear();
-            // The start slope part is ignored as it overlaps with the end part
-            paths.reserve(new_loop.paths.size() + new_loop.ends.size());
-            paths.insert(paths.end(), new_loop.paths.begin(), new_loop.paths.end());
-            paths.insert(paths.end(), new_loop.ends.begin(), new_loop.ends.end());
-        }
+        //if (!new_loop.ends.empty()) {
+        //    paths.clear();
+        //    // The start slope part is ignored as it overlaps with the end part
+        //    paths.reserve(new_loop.paths.size() + new_loop.ends.size());
+        //    paths.insert(paths.end(), new_loop.paths.begin(), new_loop.paths.end());
+        //    paths.insert(paths.end(), new_loop.ends.begin(), new_loop.ends.end());
+        //}
     }
 
     // BBS
