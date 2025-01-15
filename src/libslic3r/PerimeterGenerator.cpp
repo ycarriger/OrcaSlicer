@@ -2075,7 +2075,7 @@ void PerimeterGenerator::process_classic()
                         // won't be able to fill but we'd still remove from infill area
                         append(gaps, diff_ex(
                             offset(last,    - float(0.5 * distance)),
-                            offset(offsets,   float(0.5 * distance + 10))));  // safety offset
+                            offset(offsets,   float(0.5 * distance))));  // safety offset was distance + 10, removed by YYC
                 }
                 if (offsets.empty() && offsets_with_smaller_width.empty()) {
                     // Store the number of loops actually generated.
