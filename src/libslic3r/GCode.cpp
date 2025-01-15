@@ -4916,6 +4916,7 @@ std::string GCode::extrude_perimeters(const Print &print, const std::vector<Obje
             m_config.apply(print.get_print_region(&region - &by_region.front()).config());
 
             for (const ExtrusionEntity* ee : region.perimeters)
+                //region.perimeters.front()->
                 gcode += this->extrude_entity(*ee, "perimeter", -1., region.perimeters);
         }
     return gcode;

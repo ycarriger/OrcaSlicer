@@ -410,6 +410,7 @@ ExtrusionLoopSloped::ExtrusionLoopSloped(ExtrusionPaths&   original_paths,
                                          ExtrusionLoopRole role)
     : ExtrusionLoop(role)
 {
+    //if (role == elr) {}
     // create slopes
     const auto add_slop = [this, slope_max_segment_length, seam_gap](const ExtrusionPath &path, const Polyline &poly, double ratio_begin, double ratio_end) {
         if (poly.empty()) { return; }
