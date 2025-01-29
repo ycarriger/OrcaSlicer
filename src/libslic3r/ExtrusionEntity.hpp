@@ -39,7 +39,8 @@ enum ExtrusionRole : uint8_t {
     erCustom,
     // Extrusion role for a collection with multiple extrusion roles.
     erMixed,
-    erCount
+    erCount,
+    erSurfacePerimeter
 };
 
 // Special flags describing loop
@@ -57,12 +58,13 @@ inline bool is_perimeter(ExtrusionRole role)
 {
     return role == erPerimeter
         || role == erExternalPerimeter
-        || role == erOverhangPerimeter;
+        || role == erOverhangPerimeter
+        || role == erSurfacePerimeter;
 }
 
 inline bool is_internal_perimeter(ExtrusionRole role)
 {
-    return role == erPerimeter;
+    return role == erPerimeter || role == erSurfacePerimeter;
 }
 
 inline bool is_external_perimeter(ExtrusionRole role)

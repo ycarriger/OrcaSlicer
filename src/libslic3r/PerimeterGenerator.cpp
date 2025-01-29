@@ -491,14 +491,15 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
     // Detect steep overhangs
     bool overhangs_reverse = perimeter_generator.config->overhang_reverse &&
                              perimeter_generator.layer_id % 2 == 1; // Only calculate overhang degree on even (from GUI POV) layers
-
+    
     for (const PerimeterGeneratorLoop &loop : loops) {
         bool is_external = loop.is_external();
         bool is_small_width = loop.is_smaller_width_perimeter;
         
         ExtrusionRole role;
         ExtrusionLoopRole loop_role;
-        role = is_external ? erExternalPerimeter : erPerimeter;
+        role = is_external ? erExternalPerimeter : perimeter_generator.upper_slices == nullptr ? erSurfacePerimeter : erPerimeter;
+        
         if (loop.is_internal_contour()) {
             // Note that we set loop role to ContourInternalPerimeter
             // also when loop is both internal and external (i.e.
@@ -1976,7 +1977,9 @@ void PerimeterGenerator::process_classic()
             loop_number = 0;
         // Set the topmost layer to be one wall
         if (loop_number > 0 && config->only_one_wall_top && this->upper_slices == nullptr)
+        {
             loop_number = 0;
+        }
 
         ExPolygons last        = union_ex(surface.expolygon.simplify_p(surface_simplify_resolution));
         ExPolygons gaps;

@@ -4891,7 +4891,7 @@ std::string GCode::extrude_path(ExtrusionPath path, std::string description, dou
     // Orca: Reset average multipath flow as this is a single line, single extrude volumetric speed path
     m_multi_flow_segment_path_pa_set = false;
     m_multi_flow_segment_path_average_mm3_per_mm = 0;
-    //    description += ExtrusionEntity::role_to_string(path.role());
+    description += ExtrusionEntity::role_to_string(path.role());
     std::string gcode = this->_extrude(path, description, speed);
     if (m_wipe.enable) {
         m_wipe.path = std::move(path.polyline);
@@ -5867,6 +5867,7 @@ std::string GCode::extrusion_role_to_string_for_parser(const ExtrusionRole & rol
         case erPerimeter: return "Perimeter";
         case erExternalPerimeter: return "ExternalPerimeter";
         case erOverhangPerimeter: return "OverhangPerimeter";
+        case erSurfacePerimeter: return "SurfacePerimeter";
         case erInternalInfill: return "InternalInfill";
         case erSolidInfill: return "SolidInfill";
         case erTopSolidInfill: return "TopSolidInfill";
