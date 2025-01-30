@@ -4574,7 +4574,7 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
     // or randomize if requested
     Point last_pos = this->last_pos();
     float seam_overhang = std::numeric_limits<float>::lowest();
-    if (!m_config.spiral_mode && description == "perimeter") {
+    if (!m_config.spiral_mode && description.find("perimeter") != std::string::npos) {
         assert(m_layer != nullptr);
         m_seam_placer.place_seam(m_layer, loop, this->last_pos(), seam_overhang);
     } else
@@ -4583,7 +4583,8 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
     const auto seam_scarf_type = m_config.seam_slope_type.value;
     bool enable_seam_slope = ((seam_scarf_type == SeamScarfType::External && !is_hole) || seam_scarf_type == SeamScarfType::All) &&
         !m_config.spiral_mode &&
-        (loop.role() == erExternalPerimeter || (loop.role() == erPerimeter && m_config.seam_slope_inner_walls)) &&
+                             (loop.role() == erExternalPerimeter || (loop.role() == erPerimeter && m_config.seam_slope_inner_walls) ||
+                              (loop.role() == erSurfacePerimeter && m_config.seam_slope_inner_walls)) &&
         layer_id() > 0;
     const auto nozzle_diameter = EXTRUDER_CONFIG(nozzle_diameter);
     if (enable_seam_slope && m_config.seam_slope_conditional.value) {
@@ -4913,9 +4914,12 @@ std::string GCode::extrude_perimeters(const Print &print, const std::vector<Obje
             const bool should_print = is_first_layer ? !is_infill_first
                 : (m_config.is_infill_first == is_infill_first);
             if (!should_print) continue;
-
+                        
             for (const ExtrusionEntity* ee : region.perimeters)
-                gcode += this->extrude_entity(*ee, "perimeter", -1., region.perimeters);
+            {
+                std::string description = ee->role() == erSurfacePerimeter ? "perimeter (surface)" : "perimeter";
+                gcode += this->extrude_entity(*ee, description, -1., region.perimeters);
+            }                
         }
     return gcode;
 }
