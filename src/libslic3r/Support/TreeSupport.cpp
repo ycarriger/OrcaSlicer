@@ -2744,7 +2744,8 @@ void TreeSupport::drop_nodes()
                         return;
                     }
                     // if the link between parent and current is cut by contours, mark current as bottom contact node
-                    if (p_node->parent && intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty()==false)
+                    if (p_node->parent &&
+                        intersection_ln({p_node->position, p_node->parent->position}, layer_contours).empty() == false)
                     {
                         p_node->valid = false;
                         return;

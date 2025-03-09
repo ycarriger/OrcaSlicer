@@ -72,7 +72,7 @@ static constexpr double PI = 3.141592653589793238;
 // static constexpr double LOOP_CLIPPING_LENGTH_OVER_NOZZLE_DIAMETER = 0.15;
 static constexpr double RESOLUTION = 0.0125;
 #define                 SCALED_RESOLUTION (RESOLUTION / SCALING_FACTOR)
-static constexpr double SPARSE_INFILL_RESOLUTION = 0.04;
+static constexpr double SPARSE_INFILL_RESOLUTION = 0.0125;
 #define                 SCALED_SPARSE_INFILL_RESOLUTION (SPARSE_INFILL_RESOLUTION / SCALING_FACTOR)
 
 static constexpr double SUPPORT_RESOLUTION = 0.1;
@@ -99,7 +99,7 @@ static constexpr double WIPE_TOWER_MARGIN = 1.;
 //BBS: some global const config which user can not change, but developer can
 static constexpr bool g_config_support_sharp_tails = true;
 static constexpr bool g_config_remove_small_overhangs = true;
-static constexpr float g_config_tree_support_collision_resolution = 0.2;
+static constexpr float g_config_tree_support_collision_resolution = 0.15;
 
 // Write slices as SVG images into out directory during the 2D processing of the slices.
 //#define SLIC3R_DEBUG_SLICE_PROCESSING

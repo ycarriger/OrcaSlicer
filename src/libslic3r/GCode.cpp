@@ -4475,9 +4475,6 @@ void GCode::append_full_config(const Print &print, std::string &str)
     std::ostringstream ss;
     for (const std::string& key : cfg.keys()) {
         if (!is_banned(key) && !cfg.option(key)->is_nil()) {
-            if (key == "other_layers_print_sequence") {
-                continue;
-            }
             if (key == "wipe_tower_x" || key == "wipe_tower_y") {
                 ss << std::fixed << std::setprecision(3) << "; " << key << " = " << dynamic_cast<const ConfigOptionFloats*>(cfg.option(key))->get_at(print.get_plate_index()) << "\n";
             }
@@ -4607,7 +4604,7 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
     // or randomize if requested
     Point last_pos = this->last_pos();
     float seam_overhang = std::numeric_limits<float>::lowest();
-    if (!m_config.spiral_mode && description == "perimeter") {
+    if (!m_config.spiral_mode && description.find("perimeter") != std::string::npos) {
         assert(m_layer != nullptr);
         m_seam_placer.place_seam(m_layer, loop, this->last_pos(), seam_overhang);
     } else
@@ -4616,7 +4613,8 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
     const auto seam_scarf_type = m_config.seam_slope_type.value;
     bool enable_seam_slope = ((seam_scarf_type == SeamScarfType::External && !is_hole) || seam_scarf_type == SeamScarfType::All) &&
         !m_config.spiral_mode &&
-        (loop.role() == erExternalPerimeter || (loop.role() == erPerimeter && m_config.seam_slope_inner_walls)) &&
+                             (loop.role() == erExternalPerimeter || (loop.role() == erPerimeter && m_config.seam_slope_inner_walls) ||
+                              (loop.role() == erSurfacePerimeter && m_config.seam_slope_inner_walls)) &&
         layer_id() > 0;
     const auto nozzle_diameter = EXTRUDER_CONFIG(nozzle_diameter);
     if (enable_seam_slope && m_config.seam_slope_conditional.value) {
@@ -4783,7 +4781,7 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
 
         // Calculate the sloped loop
         ExtrusionLoopSloped new_loop(paths, seam_gap, slope_min_length, slope_max_segment_length, start_slope_ratio, loop.loop_role());
-        new_loop.clip_slope(seam_gap);
+        //new_loop.clip_slope(seam_gap);
 
         // Then extrude it
         for (const auto& p : new_loop.get_all_paths()) {
@@ -4795,13 +4793,13 @@ std::string GCode::extrude_loop(ExtrusionLoop loop, std::string description, dou
         }
 
         // Fix path for wipe
-        if (!new_loop.ends.empty()) {
-            paths.clear();
-            // The start slope part is ignored as it overlaps with the end part
-            paths.reserve(new_loop.paths.size() + new_loop.ends.size());
-            paths.insert(paths.end(), new_loop.paths.begin(), new_loop.paths.end());
-            paths.insert(paths.end(), new_loop.ends.begin(), new_loop.ends.end());
-        }
+        //if (!new_loop.ends.empty()) {
+        //    paths.clear();
+        //    // The start slope part is ignored as it overlaps with the end part
+        //    paths.reserve(new_loop.paths.size() + new_loop.ends.size());
+        //    paths.insert(paths.end(), new_loop.paths.begin(), new_loop.paths.end());
+        //    paths.insert(paths.end(), new_loop.ends.begin(), new_loop.ends.end());
+        //}
     }
 
     // BBS
@@ -4924,7 +4922,7 @@ std::string GCode::extrude_path(ExtrusionPath path, std::string description, dou
     // Orca: Reset average multipath flow as this is a single line, single extrude volumetric speed path
     m_multi_flow_segment_path_pa_set = false;
     m_multi_flow_segment_path_average_mm3_per_mm = 0;
-    //    description += ExtrusionEntity::role_to_string(path.role());
+    description += ExtrusionEntity::role_to_string(path.role());
     std::string gcode = this->_extrude(path, description, speed);
     if (m_wipe.enable) {
         m_wipe.path = std::move(path.polyline);
@@ -4946,9 +4944,12 @@ std::string GCode::extrude_perimeters(const Print &print, const std::vector<Obje
             const bool should_print = is_first_layer ? !is_infill_first
                 : (m_config.is_infill_first == is_infill_first);
             if (!should_print) continue;
-
+                        
             for (const ExtrusionEntity* ee : region.perimeters)
-                gcode += this->extrude_entity(*ee, "perimeter", -1., region.perimeters);
+            {
+                std::string description = ee->role() == erSurfacePerimeter ? "perimeter (surface)" : "perimeter";
+                gcode += this->extrude_entity(*ee, description, -1., region.perimeters);
+            }                
         }
     return gcode;
 }
@@ -5926,6 +5927,7 @@ std::string GCode::extrusion_role_to_string_for_parser(const ExtrusionRole & rol
         case erPerimeter: return "Perimeter";
         case erExternalPerimeter: return "ExternalPerimeter";
         case erOverhangPerimeter: return "OverhangPerimeter";
+        case erSurfacePerimeter: return "SurfacePerimeter";
         case erInternalInfill: return "InternalInfill";
         case erSolidInfill: return "SolidInfill";
         case erTopSolidInfill: return "TopSolidInfill";

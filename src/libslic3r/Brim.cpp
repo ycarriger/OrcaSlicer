@@ -165,7 +165,7 @@ static Polygons top_level_outer_brim_islands(const ConstPrintObjectPtrs &top_lev
 
         if (!object->support_layers().empty()) {
             for (const Polygon& support_contour : object->support_layers().front()->support_fills.polygons_covered_by_spacing()) {
-                Polygons contour_offset = offset(support_contour, brim_object_gap, ClipperLib::jtSquare);
+                Polygons contour_offset = offset(support_contour, 0, ClipperLib::jtSquare);
                 for (Polygon& poly : contour_offset)
                     poly.douglas_peucker(scaled_resolution);
 
